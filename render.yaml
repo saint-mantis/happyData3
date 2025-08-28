@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: happydata-django
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn happydata.wsgi:application"
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DEBUG
+        value: "False"
+    autoDeploy: true
+    plan: free
+    buildFilter:
+      paths:
+        - "**/*"
+    preDeployCommand: |
+      python manage.py migrate
+      python manage.py collectstatic --noinput
