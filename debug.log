@@ -11082,3 +11082,7 @@ INFO 2025-08-28 10:39:48,570 basehttp 68557 6176239616 "GET /api/regional-happin
 WARNING 2025-08-28 10:39:48,829 log 68557 6176239616 Not Found: /favicon.ico
 WARNING 2025-08-28 10:39:48,829 basehttp 68557 6176239616 "GET /favicon.ico HTTP/1.1" 404 5090
 INFO 2025-08-28 10:39:52,453 basehttp 68557 6159413248 "GET /country-trends/ HTTP/1.1" 200 41644
+INFO 2025-08-28 17:12:37,371 autoreload 68557 8536400064 /Users/arunbabu/Desktop/Code/Happy Data 3/happydata/settings.py changed, reloading.
+INFO 2025-08-28 17:12:37,935 autoreload 76434 8536400064 Watching for file changes with StatReloader
+INFO 2025-08-28 17:13:10,014 autoreload 76434 8536400064 /Users/arunbabu/Desktop/Code/Happy Data 3/happydata/settings.py changed, reloading.
+INFO 2025-08-28 17:13:10,364 autoreload 76454 8536400064 Watching for file changes with StatReloader
