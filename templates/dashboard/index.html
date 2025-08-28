@@ -1,0 +1,336 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - HappyData{% endblock %}
+
+{% block page_title %}Dashboard Overview{% endblock %}
+{% block page_description %}Explore key insights about global happiness and development indicators across {{ total_countries }} countries and regions.{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+    <div class="glass-card p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-slate-600 dark:text-slate-400">Countries</p>
+                <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ total_countries }}</p>
+            </div>
+            <div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                <i data-lucide="globe" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="glass-card p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-slate-600 dark:text-slate-400">Indicators</p>
+                <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ total_indicators }}</p>
+            </div>
+            <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                <i data-lucide="trending-up" class="w-6 h-6 text-green-600 dark:text-green-400"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="glass-card p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-slate-600 dark:text-slate-400">Years</p>
+                <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ happiness_years|length }}</p>
+            </div>
+            <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                <i data-lucide="calendar" class="w-6 h-6 text-purple-600 dark:text-purple-400"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="glass-card p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-slate-600 dark:text-slate-400">Regions</p>
+                <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ regions|length }}</p>
+            </div>
+            <div class="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
+                <i data-lucide="map" class="w-6 h-6 text-orange-600 dark:text-orange-400"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+    <!-- Global Happiness Overview -->
+    <div class="glass-card p-8">
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <i data-lucide="smile" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+            </div>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Global Happiness Overview</h2>
+        </div>
+        <div class="h-64 mb-6">
+            <canvas id="globalHappinessChart"></canvas>
+        </div>
+        <a href="{% url 'dashboard:regional_happiness' %}" 
+           class="inline-flex items-center space-x-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
+            <span>View Regional Analysis</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+    </div>
+    
+    <!-- Recent Trends -->
+    <div class="glass-card p-8">
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <i data-lucide="trending-up" class="w-5 h-5 text-green-600 dark:text-green-400"></i>
+            </div>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Development Indicators</h2>
+        </div>
+        <div class="h-64 mb-6">
+            <canvas id="indicatorTrendsChart"></canvas>
+        </div>
+        <a href="{% url 'dashboard:country_trends' %}" 
+           class="inline-flex items-center space-x-2 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium">
+            <span>Explore Country Trends</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Feature Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <!-- Country Trends -->
+    <div class="feature-card group">
+        <div class="p-6">
+            <div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="line-chart" class="w-8 h-8 text-blue-600 dark:text-blue-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-3">Country Trends</h3>
+            <p class="text-slate-600 dark:text-slate-400 mb-6">
+                Analyze how development indicators change over time for specific countries. 
+                Track progress and identify patterns across different metrics.
+            </p>
+            <a href="{% url 'dashboard:country_trends' %}" 
+               class="inline-flex items-center space-x-2 text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-1 transition-transform duration-200">
+                <span>Explore Trends</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Happiness Correlation -->
+    <div class="feature-card group">
+        <div class="p-6">
+            <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="heart" class="w-8 h-8 text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-3">Happiness Correlation</h3>
+            <p class="text-slate-600 dark:text-slate-400 mb-6">
+                Discover relationships between happiness scores and development indicators. 
+                Understand what factors contribute most to well-being.
+            </p>
+            <a href="{% url 'dashboard:happiness_correlation' %}" 
+               class="inline-flex items-center space-x-2 text-purple-600 dark:text-purple-400 font-medium group-hover:translate-x-1 transition-transform duration-200">
+                <span>Find Correlations</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Regional Analysis -->
+    <div class="feature-card group">
+        <div class="p-6">
+            <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="map-pin" class="w-8 h-8 text-green-600 dark:text-green-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-3">Regional Analysis</h3>
+            <p class="text-slate-600 dark:text-slate-400 mb-6">
+                Compare happiness levels and development indicators across different 
+                world regions. Identify regional patterns and disparities.
+            </p>
+            <a href="{% url 'dashboard:regional_happiness' %}" 
+               class="inline-flex items-center space-x-2 text-green-600 dark:text-green-400 font-medium group-hover:translate-x-1 transition-transform duration-200">
+                <span>View Regions</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Data Sources -->
+<div class="mt-16 glass-card p-8">
+    <div class="text-center">
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white mb-4">Data Sources</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div class="flex items-center space-x-4">
+                <div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                    <i data-lucide="database" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <div class="text-left">
+                    <h3 class="font-semibold text-slate-900 dark:text-white">World Bank API</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Development indicators for {{ total_countries }} countries</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                    <i data-lucide="smile" class="w-6 h-6 text-purple-600 dark:text-purple-400"></i>
+                </div>
+                <div class="text-left">
+                    <h3 class="font-semibold text-slate-900 dark:text-white">World Happiness Report</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Happiness data from 2020-2025</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Initialize dashboard charts
+document.addEventListener('DOMContentLoaded', function() {
+    initializeGlobalHappinessChart();
+    initializeIndicatorTrendsChart();
+});
+
+function initializeGlobalHappinessChart() {
+    console.log('[DEBUG] Initializing global happiness chart');
+    
+    const ctx = document.getElementById('globalHappinessChart').getContext('2d');
+    
+    // Fetch regional happiness data
+    console.log('[DEBUG] Fetching regional happiness data from /api/regional-happiness/');
+    fetch('/api/regional-happiness/')
+        .then(response => {
+            console.log(`[DEBUG] Regional happiness response status: ${response.status}`);
+            console.log(`[DEBUG] Regional happiness response ok: ${response.ok}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('[DEBUG] Regional happiness data received:', data);
+            console.log(`[DEBUG] Data type: ${typeof data}, length: ${Array.isArray(data) ? data.length : 'Not an array'}`);
+            
+            // Check if data has error
+            if (data.error) {
+                console.error('[ERROR] Regional happiness API returned error:', data.error);
+                console.log('[DEBUG] Available regions:', data.available_regions);
+                console.log('[DEBUG] Available years:', data.available_years);
+                return;
+            }
+            
+            if (!Array.isArray(data) || data.length === 0) {
+                console.error('[ERROR] No regional happiness data available');
+                return;
+            }
+            
+            // Process data for chart
+            const regions = [...new Set(data.map(item => item.region))];
+            console.log('[DEBUG] Unique regions found:', regions);
+            
+            const years = [...new Set(data.map(item => item.year))];
+            console.log('[DEBUG] Available years:', years);
+            
+            const latestYear = Math.max(...data.map(item => item.year));
+            console.log('[DEBUG] Latest year:', latestYear);
+            
+            const latestData = data.filter(item => item.year === latestYear);
+            console.log('[DEBUG] Latest year data:', latestData);
+            
+            if (latestData.length === 0) {
+                console.error('[ERROR] No data for latest year');
+                return;
+            }
+            
+            console.log('[DEBUG] Creating chart with data:', {
+                labels: latestData.map(item => item.region),
+                values: latestData.map(item => item.avg_ladder_score)
+            });
+            
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: latestData.map(item => item.region),
+                    datasets: [{
+                        data: latestData.map(item => item.avg_ladder_score),
+                        backgroundColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(147, 51, 234)', 
+                            'rgb(16, 185, 129)',
+                            'rgb(249, 115, 22)',
+                            'rgb(239, 68, 68)',
+                            'rgb(236, 72, 153)',
+                            'rgb(34, 197, 94)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('[DEBUG] Global happiness chart created successfully');
+        })
+        .catch(error => {
+            console.error('[ERROR] Error loading happiness data:', error);
+            console.error('[ERROR] Stack trace:', error.stack);
+        });
+}
+
+function initializeIndicatorTrendsChart() {
+    const ctx = document.getElementById('indicatorTrendsChart').getContext('2d');
+    
+    // Sample data for indicator trends
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['2020', '2021', '2022', '2023', '2024', '2025'],
+            datasets: [{
+                label: 'GDP per Capita',
+                data: [45000, 46000, 47500, 48000, 49000, 50000],
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Life Expectancy',
+                data: [72, 72.2, 72.5, 72.8, 73, 73.2],
+                borderColor: 'rgb(16, 185, 129)',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Health Expenditure',
+                data: [8.2, 8.5, 8.8, 9.1, 9.3, 9.5],
+                borderColor: 'rgb(245, 158, 11)',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

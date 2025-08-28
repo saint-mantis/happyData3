@@ -1,0 +1,362 @@
+{% extends 'base.html' %}
+
+{% block title %}Regional Happiness - HappyData{% endblock %}
+
+{% block page_title %}Regional Happiness Analysis{% endblock %}
+{% block page_description %}Compare happiness levels across different world regions. Identify regional patterns, trends, and disparities in well-being over time.{% endblock %}
+
+{% block content %}
+<!-- Year Selection -->
+<div class="glass-card p-6 mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <label for="regional-year-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Year for Analysis
+            </label>
+            <select id="regional-year-select" class="modern-select max-w-xs">
+                {% for year in years %}
+                <option value="{{ year }}" {% if year == 2024 %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button id="export-regional-btn" class="btn-secondary">
+            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+            Export Analysis
+        </button>
+    </div>
+</div>
+
+<!-- Regional Overview Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Regional Happiness Distribution -->
+    <div class="glass-card p-8">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Regional Happiness Distribution</h2>
+        <div class="h-80">
+            <canvas id="regional-distribution-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Regional Comparison Bar Chart -->
+    <div class="glass-card p-8">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Regional Comparison</h2>
+        <div class="h-80">
+            <canvas id="regional-comparison-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Trend Analysis -->
+<div class="glass-card p-8 mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Regional Happiness Trends (2020-2025)</h2>
+    <div class="h-96">
+        <canvas id="regional-trends-chart"></canvas>
+    </div>
+</div>
+
+<!-- Regional Statistics -->
+<div id="regional-stats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <!-- Stats will be populated dynamically -->
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let regionalDistributionChart = null;
+let regionalComparisonChart = null;
+let regionalTrendsChart = null;
+
+// Fallback methods if dashboard is not available
+const fallbackDashboard = {
+    showLoading: () => console.log('Loading...'),
+    hideLoading: () => console.log('Loading complete'),
+    showNotification: (msg, type) => console.log(`${type.toUpperCase()}: ${msg}`),
+    getColorPalette: () => ({
+        primary: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16']
+    }),
+    createDoughnutChart: (canvasId, data, options = {}) => {
+        const ctx = document.getElementById(canvasId)?.getContext('2d');
+        if (!ctx || typeof Chart === 'undefined') return null;
+        return new Chart(ctx, { type: 'doughnut', data, options });
+    },
+    createBarChart: (canvasId, data, options = {}) => {
+        const ctx = document.getElementById(canvasId)?.getContext('2d');
+        if (!ctx || typeof Chart === 'undefined') return null;
+        return new Chart(ctx, { type: 'bar', data, options });
+    },
+    createLineChart: (canvasId, data, options = {}) => {
+        const ctx = document.getElementById(canvasId)?.getContext('2d');
+        if (!ctx || typeof Chart === 'undefined') return null;
+        return new Chart(ctx, { type: 'line', data, options });
+    },
+    exportChart: (chartId, filename) => console.log(`Export ${chartId} as ${filename}`)
+};
+
+// Get dashboard with fallback
+const getDashboard = () => window.dashboard || fallbackDashboard;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait for dashboard to be available
+    const initializeRegionalDashboard = () => {
+        const yearSelect = document.getElementById('regional-year-select');
+        const exportBtn = document.getElementById('export-regional-btn');
+        
+        yearSelect.addEventListener('change', loadRegionalData);
+        exportBtn.addEventListener('click', () => exportRegionalAnalysis());
+        
+        // Load initial data
+        loadRegionalData();
+    };
+    
+    // Check if dashboard is available, otherwise wait for it
+    if (window.dashboard) {
+        initializeRegionalDashboard();
+    } else {
+        // Wait for dashboard to load
+        setTimeout(() => {
+            if (window.dashboard) {
+                initializeRegionalDashboard();
+            } else {
+                console.warn('Dashboard not available, loading with limited functionality');
+                initializeRegionalDashboard();
+            }
+        }, 500);
+    }
+});
+
+async function loadRegionalData() {
+    const year = document.getElementById('regional-year-select').value;
+    const dashboard = getDashboard();
+    
+    try {
+        dashboard.showLoading();
+        
+        // Fetch regional happiness data
+        const response = await fetch(`/api/regional-happiness/${year ? `?year=${year}` : ''}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        console.log('[DEBUG] Regional happiness data received:', data);
+        console.log('[DEBUG] Data type:', typeof data);
+        console.log('[DEBUG] Is array:', Array.isArray(data));
+        
+        // Check if data has error property (API error response)
+        if (data && data.error) {
+            console.error('[ERROR] API returned error:', data.error);
+            dashboard.showNotification(`API Error: ${data.error}`, 'error');
+            return;
+        }
+        
+        // Ensure data is an array
+        if (!Array.isArray(data)) {
+            console.error('[ERROR] Data is not an array:', data);
+            dashboard.showNotification('Invalid data format received', 'error');
+            return;
+        }
+        
+        if (data.length === 0) {
+            dashboard.showNotification('No data available for selected year', 'warning');
+            return;
+        }
+        
+        renderRegionalCharts(data, year);
+        await loadRegionalTrends();
+        updateRegionalStats(data);
+        
+    } catch (error) {
+        console.error('Error loading regional data:', error);
+        dashboard.showNotification('Error loading regional data', 'error');
+    } finally {
+        dashboard.hideLoading();
+    }
+}
+
+function renderRegionalCharts(data, year) {
+    console.log('[DEBUG] renderRegionalCharts called with:', { data, year });
+    console.log('[DEBUG] Data type in render:', typeof data);
+    console.log('[DEBUG] Is array in render:', Array.isArray(data));
+    
+    if (!Array.isArray(data)) {
+        console.error('[ERROR] Data is not an array in renderRegionalCharts:', data);
+        return;
+    }
+    
+    const yearData = data.filter(item => item.year == year);
+    console.log('[DEBUG] Filtered yearData:', yearData);
+    
+    const dashboard = getDashboard();
+    
+    // Regional Distribution (Doughnut Chart)
+    if (regionalDistributionChart) {
+        regionalDistributionChart.destroy();
+    }
+    
+    regionalDistributionChart = dashboard.createDoughnutChart('regional-distribution-chart', {
+        labels: yearData.map(item => item.region.replace(' & ', '\n& ')),
+        datasets: [{
+            data: yearData.map(item => item.avg_ladder_score),
+            backgroundColor: dashboard.getColorPalette().primary,
+            borderWidth: 0,
+            hoverOffset: 10
+        }]
+    });
+    
+    // Regional Comparison (Bar Chart)
+    if (regionalComparisonChart) {
+        regionalComparisonChart.destroy();
+    }
+    
+    const sortedData = [...yearData].sort((a, b) => b.avg_ladder_score - a.avg_ladder_score);
+    
+    regionalComparisonChart = dashboard.createBarChart('regional-comparison-chart', {
+        labels: sortedData.map(item => item.region.split(' & ')),
+        datasets: [{
+            label: 'Average Happiness Score',
+            data: sortedData.map(item => item.avg_ladder_score),
+            backgroundColor: sortedData.map((_, index) => dashboard.getColorPalette().primary[index % dashboard.getColorPalette().primary.length]),
+            borderRadius: 8,
+            borderSkipped: false
+        }]
+    }, {
+        indexAxis: 'y',
+        plugins: {
+            legend: { display: false }
+        }
+    });
+}
+
+async function loadRegionalTrends() {
+    const dashboard = getDashboard();
+    
+    try {
+        const response = await fetch('/api/regional-happiness/');
+        const allData = await response.json();
+        
+        // Group by region
+        const regions = [...new Set(allData.map(item => item.region))];
+        const years = [2020, 2021, 2022, 2023, 2024, 2025];
+        
+        const datasets = regions.map((region, index) => {
+            const regionData = years.map(year => {
+                const item = allData.find(d => d.region === region && d.year == year);
+                return item ? item.avg_ladder_score : null;
+            });
+            
+            return {
+                label: region,
+                data: regionData,
+                borderColor: dashboard.getColorPalette().primary[index % dashboard.getColorPalette().primary.length],
+                backgroundColor: dashboard.getColorPalette().primary[index % dashboard.getColorPalette().primary.length] + '20',
+                tension: 0.4,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            };
+        });
+        
+        if (regionalTrendsChart) {
+            regionalTrendsChart.destroy();
+        }
+        
+        regionalTrendsChart = dashboard.createLineChart('regional-trends-chart', {
+            labels: years,
+            datasets: datasets
+        }, {
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading regional trends:', error);
+    }
+}
+
+function updateRegionalStats(data) {
+    const year = document.getElementById('regional-year-select').value;
+    const yearData = data.filter(item => item.year == year);
+    
+    if (yearData.length === 0) return;
+    
+    // Calculate statistics
+    const scores = yearData.map(item => item.avg_ladder_score);
+    const totalCountries = yearData.reduce((sum, item) => sum + item.country_count, 0);
+    const avgScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    const maxScore = Math.max(...scores);
+    const minScore = Math.min(...scores);
+    const topRegion = yearData.find(item => item.avg_ladder_score === maxScore);
+    
+    const statsContainer = document.getElementById('regional-stats');
+    statsContainer.innerHTML = `
+        <div class="glass-card p-6">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <i data-lucide="globe" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Global Average</h3>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">${avgScore.toFixed(2)}</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Across all regions</p>
+        </div>
+        
+        <div class="glass-card p-6">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <i data-lucide="crown" class="w-5 h-5 text-green-600 dark:text-green-400"></i>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Happiest Region</h3>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">${maxScore.toFixed(2)}</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">${topRegion.region}</p>
+        </div>
+        
+        <div class="glass-card p-6">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                    <i data-lucide="trending-down" class="w-5 h-5 text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Score Range</h3>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">${(maxScore - minScore).toFixed(2)}</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Happiness gap</p>
+        </div>
+        
+        <div class="glass-card p-6">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <i data-lucide="users" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Countries</h3>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">${totalCountries}</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Total analyzed</p>
+        </div>
+    `;
+    
+    // Initialize Lucide icons
+    lucide.createIcons();
+}
+
+function exportRegionalAnalysis() {
+    const dashboard = getDashboard();
+    
+    // Create a simple export functionality
+    const year = document.getElementById('regional-year-select').value;
+    dashboard.showNotification(`Exporting regional analysis for ${year}...`, 'info');
+    
+    // Export the main trend chart
+    if (regionalTrendsChart) {
+        dashboard.exportChart('regional-trends-chart', `regional-happiness-trends-${year}`);
+    }
+}
+</script>
+{% endblock %}

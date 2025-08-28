@@ -1,0 +1,529 @@
+{% extends 'base.html' %}
+
+{% block title %}Regional Comparison - HappyData{% endblock %}
+
+{% block page_title %}Regional Country Comparison{% endblock %}
+{% block page_description %}Compare countries within specific regions for selected indicators and years. Identify regional leaders and patterns within geographic areas.{% endblock %}
+
+{% block content %}
+<!-- Controls -->
+<div class="glass-card p-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Region Selection -->
+        <div>
+            <label for="comparison-region-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Region
+            </label>
+            <select id="comparison-region-select" class="modern-select">
+                <option value="">Choose a region...</option>
+                {% for region in regions %}
+                <option value="{{ region }}">{{ region }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Indicator Selection -->
+        <div>
+            <label for="comparison-indicator-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Indicator
+            </label>
+            <select id="comparison-indicator-select" class="modern-select">
+                <option value="happiness">Happiness Score</option>
+                {% for indicator in indicators %}
+                <option value="{{ indicator.id }}">{{ indicator.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Year Selection -->
+        <div>
+            <label for="comparison-year-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Year
+            </label>
+            <select id="comparison-year-select" class="modern-select">
+                {% for year in years %}
+                <option value="{{ year }}" {% if year == 2024 %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div class="mt-6 flex flex-wrap gap-4">
+        <button id="load-comparison-btn" 
+                class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" 
+                disabled>
+            <i data-lucide="bar-chart-3" class="w-4 h-4 mr-2"></i>
+            Load Comparison
+        </button>
+        
+        <button id="toggle-comparison-view" 
+                class="btn-secondary" 
+                style="display: none;">
+            <i data-lucide="list" class="w-4 h-4 mr-2"></i>
+            Table View
+        </button>
+        
+        <button id="export-comparison-btn" 
+                class="btn-secondary" 
+                style="display: none;">
+            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+            Export Data
+        </button>
+    </div>
+</div>
+
+<!-- Comparison Results -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Chart Container -->
+    <div class="lg:col-span-2 glass-card p-8">
+        <div id="comparison-chart-header" class="mb-6" style="display: none;">
+            <h2 id="comparison-chart-title" class="text-2xl font-semibold text-slate-900 dark:text-white mb-2"></h2>
+            <p id="comparison-chart-subtitle" class="text-slate-600 dark:text-slate-400"></p>
+        </div>
+        
+        <div id="comparison-chart-container" class="relative">
+            <!-- Empty State -->
+            <div id="comparison-empty-state" class="text-center py-20">
+                <div class="p-4 bg-slate-100 dark:bg-slate-800 rounded-full w-fit mx-auto mb-4">
+                    <i data-lucide="bar-chart-3" class="w-12 h-12 text-slate-400"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Select Region to Compare</h3>
+                <p class="text-slate-600 dark:text-slate-400">Choose a region above to view country comparisons</p>
+            </div>
+            
+            <!-- Chart -->
+            <div id="comparison-chart-wrapper" style="display: none;">
+                <canvas id="comparison-chart" class="max-h-96"></canvas>
+            </div>
+            
+            <!-- Table View -->
+            <div id="comparison-table-wrapper" style="display: none;">
+                <div class="overflow-x-auto">
+                    <table id="comparison-table" class="w-full">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-700">
+                                <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Rank</th>
+                                <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Country</th>
+                                <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Value</th>
+                                <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">vs Average</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparison-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Loading State -->
+            <div id="comparison-loading" class="text-center py-20" style="display: none;">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-slate-600 dark:text-slate-300">Loading comparison data...</p>
+            </div>
+            
+            <!-- Error State -->
+            <div id="comparison-error" class="text-center py-20" style="display: none;">
+                <div class="p-4 bg-red-100 dark:bg-red-900/30 rounded-full w-fit mx-auto mb-4">
+                    <i data-lucide="alert-circle" class="w-12 h-12 text-red-600 dark:text-red-400"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Data Available</h3>
+                <p class="text-slate-600 dark:text-slate-400">No data found for the selected region and indicator</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Panel -->
+    <div class="space-y-6">
+        <!-- Regional Stats -->
+        <div id="regional-overview" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <i data-lucide="map-pin" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Regional Overview</h3>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Countries</span>
+                    <span id="country-count" class="font-semibold text-slate-900 dark:text-white"></span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Average</span>
+                    <span id="regional-average" class="font-semibold text-slate-900 dark:text-white"></span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Range</span>
+                    <span id="regional-range" class="font-semibold text-slate-900 dark:text-white"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Performers -->
+        <div id="top-performers" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <i data-lucide="trophy" class="w-5 h-5 text-green-600 dark:text-green-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Top 3 Performers</h3>
+            </div>
+            
+            <div id="top-performers-list" class="space-y-3"></div>
+        </div>
+        
+        <!-- Insights -->
+        <div id="comparison-insights" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <i data-lucide="lightbulb" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Key Insights</h3>
+            </div>
+            
+            <div id="comparison-insights-content" class="space-y-3 text-sm text-slate-700 dark:text-slate-300"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let comparisonChart = null;
+let currentView = 'chart';
+let comparisonData = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    const regionSelect = document.getElementById('comparison-region-select');
+    const indicatorSelect = document.getElementById('comparison-indicator-select');
+    const yearSelect = document.getElementById('comparison-year-select');
+    const loadBtn = document.getElementById('load-comparison-btn');
+    const toggleBtn = document.getElementById('toggle-comparison-view');
+    const exportBtn = document.getElementById('export-comparison-btn');
+    
+    function checkSelections() {
+        const hasRegion = regionSelect.value !== '';
+        loadBtn.disabled = !hasRegion;
+    }
+    
+    regionSelect.addEventListener('change', checkSelections);
+    
+    loadBtn.addEventListener('click', loadComparisonData);
+    toggleBtn.addEventListener('click', toggleView);
+    exportBtn.addEventListener('click', exportComparison);
+    
+    checkSelections();
+});
+
+async function loadComparisonData() {
+    const region = document.getElementById('comparison-region-select').value;
+    const indicator = document.getElementById('comparison-indicator-select').value;
+    const year = document.getElementById('comparison-year-select').value;
+    
+    if (!region) return;
+    
+    showComparisonLoading();
+    
+    try {
+        if (indicator === 'happiness') {
+            await loadHappinessComparison(region, year);
+        } else {
+            await loadIndicatorComparison(region, indicator, year);
+        }
+    } catch (error) {
+        console.error('Error loading comparison data:', error);
+        showComparisonError();
+    }
+}
+
+async function loadHappinessComparison(region, year) {
+    const response = await fetch(`/api/happiness-data/?region=${encodeURIComponent(region)}&year=${year}`);
+    let data = await response.json();
+    
+    if (data.results) {
+        data = data.results;
+    }
+    
+    if (data.length === 0) {
+        showComparisonError();
+        return;
+    }
+    
+    comparisonData = data.map(item => ({
+        country: item.country_name,
+        value: parseFloat(item.ladder_score),
+        formatted: parseFloat(item.ladder_score).toFixed(2)
+    })).filter(item => !isNaN(item.value));
+    
+    renderComparison('Happiness Score', region, year);
+}
+
+async function loadIndicatorComparison(region, indicatorCode, year) {
+    const indicatorName = document.getElementById('comparison-indicator-select').selectedOptions[0].text;
+    
+    // Get countries in region first
+    const countriesResponse = await fetch(`/api/countries/by_region/?region=${encodeURIComponent(region)}`);
+    const countries = await countriesResponse.json();
+    
+    if (countries.length === 0) {
+        showComparisonError();
+        return;
+    }
+    
+    // Fetch indicator data for all countries in region
+    const dataPromises = countries.map(async (country) => {
+        try {
+            const response = await fetch(`/api/country-data/${country.id}/${indicatorCode}/`);
+            const data = await response.json();
+            
+            const yearData = data.find(d => d.year == year);
+            if (yearData && yearData.value) {
+                return {
+                    country: country.name,
+                    value: parseFloat(yearData.value),
+                    formatted: parseFloat(yearData.value).toLocaleString()
+                };
+            }
+        } catch (error) {
+            console.error(`Error fetching data for ${country.name}:`, error);
+        }
+        return null;
+    });
+    
+    const results = (await Promise.all(dataPromises)).filter(item => item !== null);
+    
+    if (results.length === 0) {
+        showComparisonError();
+        return;
+    }
+    
+    comparisonData = results;
+    renderComparison(indicatorName, region, year);
+}
+
+function renderComparison(indicatorName, region, year) {
+    const sortedData = [...comparisonData].sort((a, b) => b.value - a.value);
+    
+    if (currentView === 'chart') {
+        renderComparisonChart(sortedData, indicatorName, region, year);
+    } else {
+        renderComparisonTable(sortedData, indicatorName);
+    }
+    
+    updateComparisonStats(sortedData, indicatorName, region);
+    updateTopPerformers(sortedData.slice(0, 3));
+    updateComparisonInsights(sortedData, indicatorName, region);
+    showComparisonData();
+}
+
+function renderComparisonChart(data, indicatorName, region, year) {
+    const ctx = document.getElementById('comparison-chart').getContext('2d');
+    
+    if (comparisonChart) {
+        comparisonChart.destroy();
+    }
+    
+    comparisonChart = dashboard.createBarChart('comparison-chart', {
+        labels: data.map(item => item.country),
+        datasets: [{
+            label: indicatorName,
+            data: data.map(item => item.value),
+            backgroundColor: data.map((_, index) => {
+                const colors = dashboard.getColorPalette().primary;
+                return colors[index % colors.length];
+            }),
+            borderRadius: 8,
+            borderSkipped: false
+        }]
+    }, {
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                ...dashboard.getScaleOptions().x,
+                ticks: {
+                    maxRotation: 45,
+                    minRotation: 45
+                }
+            }
+        }
+    });
+    
+    document.getElementById('comparison-chart-title').textContent = 
+        `${indicatorName} - ${region}`;
+    document.getElementById('comparison-chart-subtitle').textContent = 
+        `Comparison of ${data.length} countries in ${year}`;
+}
+
+function renderComparisonTable(data, indicatorName) {
+    const average = data.reduce((sum, item) => sum + item.value, 0) / data.length;
+    const tbody = document.getElementById('comparison-table-body');
+    
+    tbody.innerHTML = data.map((item, index) => {
+        const vsAverage = ((item.value - average) / average * 100).toFixed(1);
+        const vsAverageClass = parseFloat(vsAverage) >= 0 ? 'text-green-600' : 'text-red-600';
+        const vsAverageIcon = parseFloat(vsAverage) >= 0 ? '↗' : '↘';
+        
+        return `
+            <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3 px-4 font-medium text-slate-900 dark:text-white">${index + 1}</td>
+                <td class="py-3 px-4 text-slate-700 dark:text-slate-300">${item.country}</td>
+                <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white">${item.formatted}</td>
+                <td class="py-3 px-4 ${vsAverageClass}">${vsAverageIcon} ${Math.abs(vsAverage)}%</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateComparisonStats(data, indicatorName, region) {
+    const average = data.reduce((sum, item) => sum + item.value, 0) / data.length;
+    const max = Math.max(...data.map(item => item.value));
+    const min = Math.min(...data.map(item => item.value));
+    
+    document.getElementById('country-count').textContent = data.length;
+    document.getElementById('regional-average').textContent = 
+        indicatorName === 'Happiness Score' ? average.toFixed(2) : average.toLocaleString();
+    document.getElementById('regional-range').textContent = 
+        indicatorName === 'Happiness Score' ? (max - min).toFixed(2) : (max - min).toLocaleString();
+}
+
+function updateTopPerformers(topData) {
+    const listContainer = document.getElementById('top-performers-list');
+    
+    listContainer.innerHTML = topData.map((item, index) => {
+        const medals = ['🥇', '🥈', '🥉'];
+        return `
+            <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <div class="flex items-center space-x-3">
+                    <span class="text-lg">${medals[index]}</span>
+                    <span class="font-medium text-slate-900 dark:text-white">${item.country}</span>
+                </div>
+                <span class="font-bold text-slate-900 dark:text-white">${item.formatted}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateComparisonInsights(data, indicatorName, region) {
+    const insights = [];
+    
+    // Performance distribution
+    const average = data.reduce((sum, item) => sum + item.value, 0) / data.length;
+    const aboveAverage = data.filter(item => item.value > average).length;
+    const belowAverage = data.length - aboveAverage;
+    
+    insights.push(`${aboveAverage} countries perform above regional average`);
+    insights.push(`${belowAverage} countries perform below regional average`);
+    
+    // Range analysis
+    const max = Math.max(...data.map(item => item.value));
+    const min = Math.min(...data.map(item => item.value));
+    const range = max - min;
+    const cv = (Math.sqrt(data.reduce((sum, item) => sum + Math.pow(item.value - average, 2), 0) / data.length) / average) * 100;
+    
+    if (cv < 10) {
+        insights.push(`Low variation suggests consistent performance across the region`);
+    } else if (cv > 30) {
+        insights.push(`High variation indicates significant disparities within the region`);
+    } else {
+        insights.push(`Moderate variation shows some differences but reasonable consistency`);
+    }
+    
+    document.getElementById('comparison-insights-content').innerHTML = insights.map(insight => 
+        `<div class="flex items-start space-x-2">
+            <i data-lucide="arrow-right" class="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0"></i>
+            <span>${insight}</span>
+        </div>`
+    ).join('');
+    
+    lucide.createIcons();
+}
+
+function toggleView() {
+    currentView = currentView === 'chart' ? 'table' : 'chart';
+    const toggleBtn = document.getElementById('toggle-comparison-view');
+    
+    if (currentView === 'chart') {
+        document.getElementById('comparison-chart-wrapper').style.display = 'block';
+        document.getElementById('comparison-table-wrapper').style.display = 'none';
+        toggleBtn.innerHTML = '<i data-lucide="list" class="w-4 h-4 mr-2"></i>Table View';
+    } else {
+        document.getElementById('comparison-chart-wrapper').style.display = 'none';
+        document.getElementById('comparison-table-wrapper').style.display = 'block';
+        toggleBtn.innerHTML = '<i data-lucide="bar-chart-3" class="w-4 h-4 mr-2"></i>Chart View';
+    }
+    
+    // Re-render with current data
+    if (comparisonData.length > 0) {
+        const region = document.getElementById('comparison-region-select').value;
+        const indicatorName = document.getElementById('comparison-indicator-select').selectedOptions[0].text;
+        const year = document.getElementById('comparison-year-select').value;
+        
+        renderComparison(indicatorName, region, year);
+    }
+    
+    lucide.createIcons();
+}
+
+function exportComparison() {
+    if (comparisonData.length === 0) return;
+    
+    const region = document.getElementById('comparison-region-select').value;
+    const indicatorName = document.getElementById('comparison-indicator-select').selectedOptions[0].text;
+    const year = document.getElementById('comparison-year-select').value;
+    
+    dashboard.showNotification(`Exporting ${region} comparison...`, 'info');
+    
+    if (comparisonChart) {
+        dashboard.exportChart('comparison-chart', `${region}-${indicatorName}-${year}`);
+    }
+}
+
+function showComparisonLoading() {
+    document.getElementById('comparison-empty-state').style.display = 'none';
+    document.getElementById('comparison-chart-wrapper').style.display = 'none';
+    document.getElementById('comparison-table-wrapper').style.display = 'none';
+    document.getElementById('comparison-error').style.display = 'none';
+    document.getElementById('comparison-loading').style.display = 'block';
+    document.getElementById('comparison-chart-header').style.display = 'none';
+    document.getElementById('regional-overview').style.display = 'none';
+    document.getElementById('top-performers').style.display = 'none';
+    document.getElementById('comparison-insights').style.display = 'none';
+    document.getElementById('toggle-comparison-view').style.display = 'none';
+    document.getElementById('export-comparison-btn').style.display = 'none';
+}
+
+function showComparisonData() {
+    document.getElementById('comparison-empty-state').style.display = 'none';
+    document.getElementById('comparison-loading').style.display = 'none';
+    document.getElementById('comparison-error').style.display = 'none';
+    
+    if (currentView === 'chart') {
+        document.getElementById('comparison-chart-wrapper').style.display = 'block';
+        document.getElementById('comparison-table-wrapper').style.display = 'none';
+    } else {
+        document.getElementById('comparison-chart-wrapper').style.display = 'none';
+        document.getElementById('comparison-table-wrapper').style.display = 'block';
+    }
+    
+    document.getElementById('comparison-chart-header').style.display = 'block';
+    document.getElementById('regional-overview').style.display = 'block';
+    document.getElementById('top-performers').style.display = 'block';
+    document.getElementById('comparison-insights').style.display = 'block';
+    document.getElementById('toggle-comparison-view').style.display = 'inline-flex';
+    document.getElementById('export-comparison-btn').style.display = 'inline-flex';
+}
+
+function showComparisonError() {
+    document.getElementById('comparison-empty-state').style.display = 'none';
+    document.getElementById('comparison-chart-wrapper').style.display = 'none';
+    document.getElementById('comparison-table-wrapper').style.display = 'none';
+    document.getElementById('comparison-loading').style.display = 'none';
+    document.getElementById('comparison-error').style.display = 'block';
+    document.getElementById('comparison-chart-header').style.display = 'none';
+    document.getElementById('regional-overview').style.display = 'none';
+    document.getElementById('top-performers').style.display = 'none';
+    document.getElementById('comparison-insights').style.display = 'none';
+    document.getElementById('toggle-comparison-view').style.display = 'none';
+    document.getElementById('export-comparison-btn').style.display = 'none';
+}
+</script>
+{% endblock %}

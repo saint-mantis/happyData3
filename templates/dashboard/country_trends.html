@@ -1,0 +1,421 @@
+{% extends 'base.html' %}
+
+{% block title %}Country Trends - HappyData{% endblock %}
+
+{% block page_title %}Country Indicator Trends{% endblock %}
+{% block page_description %}Analyze how development indicators change over time for specific countries. Track progress and identify patterns across different metrics.{% endblock %}
+
+{% block content %}
+<!-- Controls -->
+<div class="glass-card p-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Country Selection -->
+        <div>
+            <label for="country-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Country
+            </label>
+            <select id="country-select" class="modern-select">
+                <option value="">Choose a country...</option>
+                {% for country in countries %}
+                <option value="{{ country.id }}">{{ country.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Indicator Selection -->
+        <div>
+            <label for="indicator-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Indicator
+            </label>
+            <select id="indicator-select" class="modern-select">
+                <option value="">Choose an indicator...</option>
+                {% for indicator in indicators %}
+                <option value="{{ indicator.id }}">{{ indicator.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div class="mt-6 flex flex-wrap gap-4">
+        <button id="load-trend-btn" 
+                class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" 
+                disabled>
+            <i data-lucide="trending-up" class="w-4 h-4 mr-2"></i>
+            Load Trend Data
+        </button>
+        
+        <button id="export-chart-btn" 
+                class="btn-secondary" 
+                style="display: none;">
+            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+            Export Chart
+        </button>
+    </div>
+</div>
+
+<!-- Chart Container -->
+<div class="glass-card p-8">
+    <div id="chart-header" class="mb-6" style="display: none;">
+        <h2 id="chart-title" class="text-2xl font-semibold text-slate-900 dark:text-white mb-2"></h2>
+        <p id="chart-subtitle" class="text-slate-600 dark:text-slate-400"></p>
+    </div>
+    
+    <div id="chart-container" class="relative">
+        <!-- Empty State -->
+        <div id="empty-state" class="text-center py-20">
+            <div class="p-4 bg-slate-100 dark:bg-slate-800 rounded-full w-fit mx-auto mb-4">
+                <i data-lucide="line-chart" class="w-12 h-12 text-slate-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Select Country and Indicator</h3>
+            <p class="text-slate-600 dark:text-slate-400">Choose a country and indicator above to view trend data</p>
+        </div>
+        
+        <!-- Chart -->
+        <div id="chart-wrapper" style="display: none;">
+            <canvas id="trend-chart" class="max-h-96"></canvas>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="chart-loading" class="text-center py-20" style="display: none;">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-slate-600 dark:text-slate-300">Loading trend data...</p>
+        </div>
+        
+        <!-- Error State -->
+        <div id="chart-error" class="text-center py-20" style="display: none;">
+            <div class="p-4 bg-red-100 dark:bg-red-900/30 rounded-full w-fit mx-auto mb-4">
+                <i data-lucide="alert-circle" class="w-12 h-12 text-red-600 dark:text-red-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Data Available</h3>
+            <p class="text-slate-600 dark:text-slate-400">No data found for the selected country and indicator combination</p>
+        </div>
+    </div>
+</div>
+
+<!-- Data Table -->
+<div id="data-table-container" class="glass-card p-8 mt-8" style="display: none;">
+    <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Raw Data</h3>
+    <div class="overflow-x-auto">
+        <table id="data-table" class="w-full">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700">
+                    <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Year</th>
+                    <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Value</th>
+                    <th class="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Change</th>
+                </tr>
+            </thead>
+            <tbody id="data-table-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Insights Panel -->
+<div id="insights-panel" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8" style="display: none;">
+    <div class="glass-card p-6">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <i data-lucide="trending-up" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+            </div>
+            <h4 class="font-semibold text-slate-900 dark:text-white">Trend Direction</h4>
+        </div>
+        <p id="trend-direction" class="text-2xl font-bold text-slate-900 dark:text-white"></p>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Overall direction</p>
+    </div>
+    
+    <div class="glass-card p-6">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <i data-lucide="percent" class="w-5 h-5 text-green-600 dark:text-green-400"></i>
+            </div>
+            <h4 class="font-semibold text-slate-900 dark:text-white">Total Change</h4>
+        </div>
+        <p id="total-change" class="text-2xl font-bold text-slate-900 dark:text-white"></p>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">From 2020 to 2025</p>
+    </div>
+    
+    <div class="glass-card p-6">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <i data-lucide="activity" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <h4 class="font-semibold text-slate-900 dark:text-white">Average Annual</h4>
+        </div>
+        <p id="avg-change" class="text-2xl font-bold text-slate-900 dark:text-white"></p>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Per year change</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let trendChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const countrySelect = document.getElementById('country-select');
+    const indicatorSelect = document.getElementById('indicator-select');
+    const loadBtn = document.getElementById('load-trend-btn');
+    const exportBtn = document.getElementById('export-chart-btn');
+    
+    // Enable load button when both selections are made
+    function checkSelections() {
+        const hasCountry = countrySelect.value !== '';
+        const hasIndicator = indicatorSelect.value !== '';
+        loadBtn.disabled = !(hasCountry && hasIndicator);
+    }
+    
+    countrySelect.addEventListener('change', checkSelections);
+    indicatorSelect.addEventListener('change', checkSelections);
+    
+    loadBtn.addEventListener('click', loadTrendData);
+    exportBtn.addEventListener('click', exportChart);
+});
+
+async function loadTrendData() {
+    const countryCode = document.getElementById('country-select').value;
+    const indicatorCode = document.getElementById('indicator-select').value;
+    
+    console.log(`[DEBUG] loadTrendData called with country: ${countryCode}, indicator: ${indicatorCode}`);
+    
+    if (!countryCode || !indicatorCode) {
+        console.log('[DEBUG] Missing country or indicator code');
+        return;
+    }
+    
+    showChartLoading();
+    
+    try {
+        const url = `/api/country-data/${countryCode}/${indicatorCode}/`;
+        console.log(`[DEBUG] Fetching from URL: ${url}`);
+        
+        const response = await fetch(url);
+        console.log(`[DEBUG] Response status: ${response.status}`);
+        console.log(`[DEBUG] Response ok: ${response.ok}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[ERROR] HTTP ${response.status}: ${errorText}`);
+            try {
+                const errorData = JSON.parse(errorText);
+                console.error('[ERROR] Parsed error data:', errorData);
+                dashboard.showNotification(`API Error: ${errorData.error || 'Unknown error'}`, 'error');
+            } catch (parseError) {
+                console.error('[ERROR] Could not parse error response:', parseError);
+                dashboard.showNotification(`HTTP Error ${response.status}: ${errorText}`, 'error');
+            }
+            showChartError();
+            return;
+        }
+        
+        const data = await response.json();
+        console.log(`[DEBUG] Received data:`, data);
+        console.log(`[DEBUG] Data type:`, typeof data);
+        console.log(`[DEBUG] Data length:`, Array.isArray(data) ? data.length : 'Not an array');
+        
+        if (!Array.isArray(data)) {
+            console.error('[ERROR] Data is not an array:', data);
+            if (data.error) {
+                dashboard.showNotification(`Data Error: ${data.error}`, 'error');
+            }
+            showChartError();
+            return;
+        }
+        
+        if (data.length === 0) {
+            console.log('[DEBUG] No data returned');
+            dashboard.showNotification('No data available for this combination', 'warning');
+            showChartError();
+            return;
+        }
+        
+        console.log(`[DEBUG] Processing ${data.length} data points`);
+        console.log(`[DEBUG] Sample data point:`, data[0]);
+        
+        renderTrendChart(data);
+        updateDataTable(data);
+        updateInsights(data);
+        showChartData();
+        
+    } catch (error) {
+        console.error('[ERROR] Error loading trend data:', error);
+        console.error('[ERROR] Stack trace:', error.stack);
+        dashboard.showNotification(`Error: ${error.message}`, 'error');
+        showChartError();
+    }
+}
+
+function renderTrendChart(data) {
+    const ctx = document.getElementById('trend-chart').getContext('2d');
+    
+    // Destroy existing chart
+    if (trendChart) {
+        trendChart.destroy();
+    }
+    
+    const years = data.map(item => item.year);
+    const values = data.map(item => parseFloat(item.value));
+    
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [{
+                label: data[0].indicator_name,
+                data: values,
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: 'rgb(59, 130, 246)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: 'rgba(59, 130, 246, 0.5)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    displayColors: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.1)'
+                    },
+                    ticks: {
+                        color: 'rgba(100, 116, 139, 0.8)'
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.1)'
+                    },
+                    ticks: {
+                        color: 'rgba(100, 116, 139, 0.8)'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+    
+    // Update chart title
+    const countryName = document.getElementById('country-select').selectedOptions[0].text;
+    const indicatorName = data[0].indicator_name;
+    
+    document.getElementById('chart-title').textContent = `${indicatorName} - ${countryName}`;
+    document.getElementById('chart-subtitle').textContent = `Trend from ${Math.min(...years)} to ${Math.max(...years)}`;
+}
+
+function updateDataTable(data) {
+    const tbody = document.getElementById('data-table-body');
+    tbody.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-slate-100 dark:border-slate-800';
+        
+        // Calculate change from previous year
+        let change = '';
+        if (index > 0) {
+            const prevValue = parseFloat(data[index - 1].value);
+            const currentValue = parseFloat(item.value);
+            const changeValue = currentValue - prevValue;
+            const changePercent = ((changeValue / prevValue) * 100).toFixed(2);
+            
+            const changeClass = changeValue >= 0 ? 'text-green-600' : 'text-red-600';
+            const changeIcon = changeValue >= 0 ? '↗' : '↘';
+            
+            change = `<span class="${changeClass}">${changeIcon} ${changePercent}%</span>`;
+        }
+        
+        row.innerHTML = `
+            <td class="py-3 px-4 font-medium text-slate-900 dark:text-white">${item.year}</td>
+            <td class="py-3 px-4 text-slate-700 dark:text-slate-300">${parseFloat(item.value).toLocaleString()}</td>
+            <td class="py-3 px-4">${change}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function updateInsights(data) {
+    const values = data.map(item => parseFloat(item.value));
+    const firstValue = values[0];
+    const lastValue = values[values.length - 1];
+    
+    // Trend direction
+    const totalChange = lastValue - firstValue;
+    const trendDirection = totalChange >= 0 ? '📈 Increasing' : '📉 Decreasing';
+    document.getElementById('trend-direction').textContent = trendDirection;
+    
+    // Total change
+    const totalChangePercent = ((totalChange / firstValue) * 100).toFixed(2);
+    document.getElementById('total-change').textContent = `${totalChangePercent}%`;
+    
+    // Average annual change
+    const yearSpan = data.length - 1;
+    const avgAnnualPercent = (totalChangePercent / yearSpan).toFixed(2);
+    document.getElementById('avg-change').textContent = `${avgAnnualPercent}%`;
+}
+
+function showChartLoading() {
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('chart-wrapper').style.display = 'none';
+    document.getElementById('chart-error').style.display = 'none';
+    document.getElementById('chart-loading').style.display = 'block';
+    document.getElementById('chart-header').style.display = 'none';
+    document.getElementById('data-table-container').style.display = 'none';
+    document.getElementById('insights-panel').style.display = 'none';
+    document.getElementById('export-chart-btn').style.display = 'none';
+}
+
+function showChartData() {
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('chart-loading').style.display = 'none';
+    document.getElementById('chart-error').style.display = 'none';
+    document.getElementById('chart-wrapper').style.display = 'block';
+    document.getElementById('chart-header').style.display = 'block';
+    document.getElementById('data-table-container').style.display = 'block';
+    document.getElementById('insights-panel').style.display = 'grid';
+    document.getElementById('export-chart-btn').style.display = 'inline-flex';
+}
+
+function showChartError() {
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('chart-wrapper').style.display = 'none';
+    document.getElementById('chart-loading').style.display = 'none';
+    document.getElementById('chart-error').style.display = 'block';
+    document.getElementById('chart-header').style.display = 'none';
+    document.getElementById('data-table-container').style.display = 'none';
+    document.getElementById('insights-panel').style.display = 'none';
+    document.getElementById('export-chart-btn').style.display = 'none';
+}
+
+function exportChart() {
+    if (trendChart) {
+        const url = trendChart.toBase64Image();
+        const link = document.createElement('a');
+        link.download = 'country-trend-chart.png';
+        link.href = url;
+        link.click();
+    }
+}
+</script>
+{% endblock %}

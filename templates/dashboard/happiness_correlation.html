@@ -1,0 +1,670 @@
+{% extends 'base.html' %}
+
+{% block title %}Happiness Correlation - HappyData{% endblock %}
+
+{% block page_title %}Happiness Correlation Analysis{% endblock %}
+{% block page_description %}Discover relationships between happiness scores and development indicators. Understand what factors contribute most to well-being across different countries and regions.{% endblock %}
+
+{% block content %}
+<!-- Controls -->
+<div class="glass-card p-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Region/Country Filter -->
+        <div>
+            <label for="correlation-country-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Analysis Scope
+            </label>
+            <select id="correlation-country-select" class="modern-select">
+                <option value="" selected>All Countries (Recommended)</option>
+                <option value="" disabled>─── Single Country Analysis ───</option>
+                {% for country in countries %}
+                <option value="{{ country.id }}">{{ country.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                For correlation analysis, "All Countries" shows relationships across nations
+            </p>
+        </div>
+        
+        <!-- Indicator Selection -->
+        <div>
+            <label for="correlation-indicator-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Indicator
+            </label>
+            <select id="correlation-indicator-select" class="modern-select">
+                <option value="">Choose an indicator...</option>
+                {% for indicator in indicators %}
+                <option value="{{ indicator.id }}">{{ indicator.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Year Selection -->
+        <div>
+            <label for="correlation-year-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Year
+            </label>
+            <select id="correlation-year-select" class="modern-select">
+                {% for year in years %}
+                <option value="{{ year }}" {% if year == 2024 %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div class="mt-6 flex flex-wrap gap-4">
+        <button id="load-correlation-btn" 
+                class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" 
+                disabled>
+            <i data-lucide="scatter-chart" class="w-4 h-4 mr-2"></i>
+            Analyze Correlation
+        </button>
+        
+        <button id="switch-chart-type" 
+                class="btn-secondary" 
+                style="display: none;">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 mr-2"></i>
+            Switch to Bar Chart
+        </button>
+        
+        <button id="export-correlation-btn" 
+                class="btn-secondary" 
+                style="display: none;">
+            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+            Export Analysis
+        </button>
+    </div>
+</div>
+
+<!-- Analysis Results -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Chart Container -->
+    <div class="glass-card p-8">
+        <div id="correlation-chart-header" class="mb-6" style="display: none;">
+            <h2 id="correlation-chart-title" class="text-2xl font-semibold text-slate-900 dark:text-white mb-2"></h2>
+            <p id="correlation-chart-subtitle" class="text-slate-600 dark:text-slate-400"></p>
+        </div>
+        
+        <div id="correlation-chart-container" class="relative">
+            <!-- Empty State -->
+            <div id="correlation-empty-state" class="text-center py-20">
+                <div class="p-4 bg-slate-100 dark:bg-slate-800 rounded-full w-fit mx-auto mb-4">
+                    <i data-lucide="scatter-chart" class="w-12 h-12 text-slate-400"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Select Indicator to Analyze</h3>
+                <p class="text-slate-600 dark:text-slate-400">Choose an indicator above to explore its correlation with happiness scores</p>
+            </div>
+            
+            <!-- Chart -->
+            <div id="correlation-chart-wrapper" style="display: none;">
+                <canvas id="correlation-chart" class="max-h-96"></canvas>
+            </div>
+            
+            <!-- Loading State -->
+            <div id="correlation-loading" class="text-center py-20" style="display: none;">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-slate-600 dark:text-slate-300">Analyzing correlation...</p>
+            </div>
+            
+            <!-- Error State -->
+            <div id="correlation-error" class="text-center py-20" style="display: none;">
+                <div class="p-4 bg-red-100 dark:bg-red-900/30 rounded-full w-fit mx-auto mb-4">
+                    <i data-lucide="alert-circle" class="w-12 h-12 text-red-600 dark:text-red-400"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Insufficient Data</h3>
+                <p class="text-slate-600 dark:text-slate-400 mb-4">Not enough data points to perform correlation analysis</p>
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 max-w-md mx-auto">
+                    <p class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>💡 Tip:</strong> For correlation analysis, select "All Countries (Recommended)" to compare relationships across multiple nations.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Panel -->
+    <div class="space-y-6">
+        <!-- Correlation Coefficient -->
+        <div id="correlation-stats" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <i data-lucide="trending-up" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Correlation Strength</h3>
+            </div>
+            
+            <div class="text-center">
+                <div id="correlation-coefficient" class="text-4xl font-bold text-slate-900 dark:text-white mb-2"></div>
+                <div id="correlation-strength" class="text-sm text-slate-600 dark:text-slate-400 mb-4"></div>
+                <div id="correlation-interpretation" class="text-sm text-slate-700 dark:text-slate-300"></div>
+            </div>
+        </div>
+        
+        <!-- Top Contributors -->
+        <div id="top-countries" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <i data-lucide="crown" class="w-5 h-5 text-green-600 dark:text-green-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Top Performers</h3>
+            </div>
+            
+            <div id="top-countries-list" class="space-y-3"></div>
+        </div>
+        
+        <!-- Insights -->
+        <div id="correlation-insights" class="glass-card p-6" style="display: none;">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <i data-lucide="lightbulb" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Key Insights</h3>
+            </div>
+            
+            <div id="insights-content" class="space-y-3 text-sm text-slate-700 dark:text-slate-300"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Dual-Axis Comparison -->
+<div id="dual-axis-container" class="glass-card p-8 mt-8" style="display: none;">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">Dual-Axis Trend Comparison</h3>
+            <p class="text-slate-600 dark:text-slate-400">Compare happiness trends with indicator trends over time</p>
+        </div>
+        <button id="toggle-dual-axis" class="btn-secondary">
+            <i data-lucide="layers" class="w-4 h-4 mr-2"></i>
+            Toggle View
+        </button>
+    </div>
+    
+    <div class="h-80">
+        <canvas id="dual-axis-chart"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let correlationChart = null;
+let dualAxisChart = null;
+let currentChartType = 'scatter';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const countrySelect = document.getElementById('correlation-country-select');
+    const indicatorSelect = document.getElementById('correlation-indicator-select');
+    const yearSelect = document.getElementById('correlation-year-select');
+    const loadBtn = document.getElementById('load-correlation-btn');
+    const switchBtn = document.getElementById('switch-chart-type');
+    const exportBtn = document.getElementById('export-correlation-btn');
+    
+    function checkSelections() {
+        const hasIndicator = indicatorSelect.value !== '';
+        loadBtn.disabled = !hasIndicator;
+    }
+    
+    indicatorSelect.addEventListener('change', checkSelections);
+    
+    loadBtn.addEventListener('click', loadCorrelationAnalysis);
+    switchBtn.addEventListener('click', switchChartType);
+    exportBtn.addEventListener('click', () => exportChart('correlation-chart', 'happiness-correlation'));
+    
+    // Initialize with sample data
+    checkSelections();
+});
+
+async function loadCorrelationAnalysis() {
+    const countryCode = document.getElementById('correlation-country-select').value;
+    const indicatorCode = document.getElementById('correlation-indicator-select').value;
+    const year = document.getElementById('correlation-year-select').value;
+    
+    if (!indicatorCode) return;
+    
+    showCorrelationLoading();
+    
+    try {
+        // Fetch happiness data
+        let happinessUrl = '/api/happiness-data/';
+        if (year) happinessUrl += `?year=${year}`;
+        if (countryCode) happinessUrl += (happinessUrl.includes('?') ? '&' : '?') + `country=${countryCode}`;
+        
+        console.log('[DEBUG] Fetching happiness data from:', happinessUrl);
+        const happinessResponse = await fetch(happinessUrl);
+        const happinessData = await happinessResponse.json();
+        
+        console.log('[DEBUG] Raw happiness response:', happinessData);
+        
+        if (happinessData.results) {
+            var data = happinessData.results;
+        } else {
+            var data = happinessData;
+        }
+        
+        console.log('[DEBUG] Processed happiness data:', data);
+        console.log('[DEBUG] Happiness data length:', data.length);
+        
+        if (data.length === 0) {
+            console.error('[ERROR] No happiness data found');
+            showCorrelationError();
+            return;
+        }
+        
+        // Fetch indicator data for countries in happiness data
+        const indicatorPromises = data.map(async (item) => {
+            if (!item.country_code) return null;
+            
+            try {
+                const response = await fetch(`/api/country-data/${item.country_code}/${indicatorCode}/`);
+                const indicatorData = await response.json();
+                
+                // Find data for the specific year
+                const yearData = indicatorData.find(d => d.year == year);
+                if (yearData && yearData.value) {
+                    return {
+                        country: item.country_name,
+                        happiness: parseFloat(item.ladder_score),
+                        indicator: parseFloat(yearData.value),
+                        country_code: item.country_code
+                    };
+                }
+            } catch (error) {
+                console.error(`Error fetching data for ${item.country_name}:`, error);
+            }
+            return null;
+        });
+        
+        const correlationData = (await Promise.all(indicatorPromises)).filter(item => item !== null);
+        
+        console.log('[DEBUG] Final correlation data:', correlationData);
+        console.log('[DEBUG] Correlation data length:', correlationData.length);
+        
+        if (correlationData.length < 3) {
+            console.error('[ERROR] Insufficient data for correlation analysis:', correlationData.length, 'countries');
+            showCorrelationError();
+            return;
+        }
+        
+        renderCorrelationChart(correlationData);
+        updateCorrelationStats(correlationData);
+        updateTopCountries(correlationData);
+        updateInsights(correlationData, indicatorCode);
+        showCorrelationData();
+        
+        // Load dual-axis comparison if single country selected
+        if (countryCode) {
+            loadDualAxisComparison(countryCode, indicatorCode);
+        }
+        
+    } catch (error) {
+        console.error('Error loading correlation data:', error);
+        showCorrelationError();
+    }
+}
+
+function renderCorrelationChart(data) {
+    const ctx = document.getElementById('correlation-chart').getContext('2d');
+    
+    if (correlationChart) {
+        correlationChart.destroy();
+    }
+    
+    const indicatorName = document.getElementById('correlation-indicator-select').selectedOptions[0].text;
+    const year = document.getElementById('correlation-year-select').value;
+    
+    if (currentChartType === 'scatter') {
+        correlationChart = dashboard.createScatterChart('correlation-chart', {
+            datasets: [{
+                label: `${indicatorName} vs Happiness Score`,
+                data: data.map(item => ({
+                    x: item.indicator,
+                    y: item.happiness,
+                    country: item.country
+                })),
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        }, {
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            return [
+                                `Happiness: ${context.parsed.y.toFixed(2)}`,
+                                `${indicatorName}: ${context.parsed.x.toLocaleString()}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ...dashboard.getScaleOptions().x,
+                    title: {
+                        display: true,
+                        text: indicatorName,
+                        color: dashboard.isDarkMode ? '#e2e8f0' : '#475569'
+                    }
+                },
+                y: {
+                    ...dashboard.getScaleOptions().y,
+                    title: {
+                        display: true,
+                        text: 'Happiness Score',
+                        color: dashboard.isDarkMode ? '#e2e8f0' : '#475569'
+                    }
+                }
+            }
+        });
+    } else {
+        // Bar chart view
+        const sortedData = [...data].sort((a, b) => b.happiness - a.happiness);
+        
+        correlationChart = dashboard.createBarChart('correlation-chart', {
+            labels: sortedData.map(item => item.country),
+            datasets: [{
+                label: 'Happiness Score',
+                data: sortedData.map(item => item.happiness),
+                backgroundColor: dashboard.getColorPalette().primary,
+                borderRadius: 8,
+                borderSkipped: false
+            }]
+        }, {
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    ...dashboard.getScaleOptions().x,
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        });
+    }
+    
+    document.getElementById('correlation-chart-title').textContent = 
+        `${indicatorName} vs Happiness (${year})`;
+    document.getElementById('correlation-chart-subtitle').textContent = 
+        `Analysis of ${data.length} countries`;
+}
+
+function updateCorrelationStats(data) {
+    // Calculate correlation coefficient
+    const correlation = calculateCorrelation(
+        data.map(d => d.indicator),
+        data.map(d => d.happiness)
+    );
+    
+    document.getElementById('correlation-coefficient').textContent = correlation.toFixed(3);
+    
+    // Determine strength and color
+    const absCorr = Math.abs(correlation);
+    let strength, color;
+    
+    if (absCorr >= 0.8) {
+        strength = 'Very Strong';
+        color = 'text-green-600';
+    } else if (absCorr >= 0.6) {
+        strength = 'Strong';
+        color = 'text-blue-600';
+    } else if (absCorr >= 0.4) {
+        strength = 'Moderate';
+        color = 'text-yellow-600';
+    } else if (absCorr >= 0.2) {
+        strength = 'Weak';
+        color = 'text-orange-600';
+    } else {
+        strength = 'Very Weak';
+        color = 'text-red-600';
+    }
+    
+    document.getElementById('correlation-strength').textContent = strength;
+    document.getElementById('correlation-strength').className = `text-sm ${color} font-medium`;
+    
+    // Interpretation
+    const direction = correlation > 0 ? 'positive' : 'negative';
+    const interpretation = `${direction === 'positive' ? 'Higher' : 'Lower'} values of this indicator tend to be associated with ${direction === 'positive' ? 'higher' : 'lower'} happiness scores.`;
+    
+    document.getElementById('correlation-interpretation').textContent = interpretation;
+}
+
+function updateTopCountries(data) {
+    const sortedData = [...data].sort((a, b) => b.happiness - a.happiness).slice(0, 5);
+    const listContainer = document.getElementById('top-countries-list');
+    
+    listContainer.innerHTML = sortedData.map((item, index) => `
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <div class="flex items-center space-x-3">
+                <div class="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                    <span class="text-xs text-white font-bold">${index + 1}</span>
+                </div>
+                <span class="font-medium text-slate-900 dark:text-white">${item.country}</span>
+            </div>
+            <div class="text-right">
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">${item.happiness.toFixed(2)}</div>
+                <div class="text-xs text-slate-500">${item.indicator.toLocaleString()}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateInsights(data, indicatorCode) {
+    const correlation = calculateCorrelation(
+        data.map(d => d.indicator),
+        data.map(d => d.happiness)
+    );
+    
+    const insights = [];
+    
+    // Correlation insight
+    if (Math.abs(correlation) > 0.6) {
+        insights.push(`• Strong ${correlation > 0 ? 'positive' : 'negative'} relationship detected (r = ${correlation.toFixed(3)})`);
+    } else if (Math.abs(correlation) > 0.3) {
+        insights.push(`• Moderate relationship observed between the variables`);
+    } else {
+        insights.push(`• Weak relationship suggests other factors may be more influential`);
+    }
+    
+    // Data range insights
+    const happinessRange = Math.max(...data.map(d => d.happiness)) - Math.min(...data.map(d => d.happiness));
+    const indicatorRange = Math.max(...data.map(d => d.indicator)) - Math.min(...data.map(d => d.indicator));
+    
+    insights.push(`• Happiness scores range from ${Math.min(...data.map(d => d.happiness)).toFixed(1)} to ${Math.max(...data.map(d => d.happiness)).toFixed(1)}`);
+    
+    // Sample size insight
+    insights.push(`• Analysis based on ${data.length} countries with available data`);
+    
+    document.getElementById('insights-content').innerHTML = insights.map(insight => 
+        `<div class="flex items-start space-x-2">
+            <i data-lucide="arrow-right" class="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0"></i>
+            <span>${insight.substring(2)}</span>
+        </div>`
+    ).join('');
+    
+    // Reinitialize Lucide icons
+    lucide.createIcons();
+}
+
+function calculateCorrelation(x, y) {
+    const n = x.length;
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = y.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+    const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+    
+    const numerator = n * sumXY - sumX * sumY;
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+    
+    return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function switchChartType() {
+    currentChartType = currentChartType === 'scatter' ? 'bar' : 'scatter';
+    const btn = document.getElementById('switch-chart-type');
+    
+    if (currentChartType === 'scatter') {
+        btn.innerHTML = '<i data-lucide="bar-chart-3" class="w-4 h-4 mr-2"></i>Switch to Bar Chart';
+    } else {
+        btn.innerHTML = '<i data-lucide="scatter-chart" class="w-4 h-4 mr-2"></i>Switch to Scatter Plot';
+    }
+    
+    // Reload chart with new type
+    loadCorrelationAnalysis();
+    
+    // Reinitialize Lucide icons
+    lucide.createIcons();
+}
+
+async function loadDualAxisComparison(countryCode, indicatorCode) {
+    try {
+        const [happinessResponse, indicatorResponse] = await Promise.all([
+            fetch(`/api/happiness-data/${countryCode}/`),
+            fetch(`/api/country-data/${countryCode}/${indicatorCode}/`)
+        ]);
+        
+        const happinessData = await happinessResponse.json();
+        const indicatorData = await indicatorResponse.json();
+        
+        if (happinessData.length > 0 && indicatorData.length > 0) {
+            renderDualAxisChart(happinessData, indicatorData, countryCode);
+            document.getElementById('dual-axis-container').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading dual-axis data:', error);
+    }
+}
+
+function renderDualAxisChart(happinessData, indicatorData, countryCode) {
+    const ctx = document.getElementById('dual-axis-chart').getContext('2d');
+    
+    if (dualAxisChart) {
+        dualAxisChart.destroy();
+    }
+    
+    const years = ['2020', '2021', '2022', '2023', '2024', '2025'];
+    const happinessValues = years.map(year => {
+        const item = happinessData.find(d => d.year == year);
+        return item ? parseFloat(item.ladder_score) : null;
+    });
+    
+    const indicatorValues = years.map(year => {
+        const item = indicatorData.find(d => d.year == year);
+        return item ? parseFloat(item.value) : null;
+    });
+    
+    const indicatorName = document.getElementById('correlation-indicator-select').selectedOptions[0].text;
+    
+    dualAxisChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [{
+                label: 'Happiness Score',
+                data: happinessValues,
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                yAxisID: 'y',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: indicatorName,
+                data: indicatorValues,
+                borderColor: 'rgb(16, 185, 129)',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                yAxisID: 'y1',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                x: dashboard.getScaleOptions().x,
+                y: {
+                    ...dashboard.getScaleOptions().y,
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Happiness Score',
+                        color: dashboard.isDarkMode ? '#e2e8f0' : '#475569'
+                    }
+                },
+                y1: {
+                    ...dashboard.getScaleOptions().y,
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: indicatorName,
+                        color: dashboard.isDarkMode ? '#e2e8f0' : '#475569'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                }
+            }
+        }
+    });
+}
+
+function showCorrelationLoading() {
+    document.getElementById('correlation-empty-state').style.display = 'none';
+    document.getElementById('correlation-chart-wrapper').style.display = 'none';
+    document.getElementById('correlation-error').style.display = 'none';
+    document.getElementById('correlation-loading').style.display = 'block';
+    document.getElementById('correlation-chart-header').style.display = 'none';
+    document.getElementById('correlation-stats').style.display = 'none';
+    document.getElementById('top-countries').style.display = 'none';
+    document.getElementById('correlation-insights').style.display = 'none';
+    document.getElementById('switch-chart-type').style.display = 'none';
+    document.getElementById('export-correlation-btn').style.display = 'none';
+}
+
+function showCorrelationData() {
+    document.getElementById('correlation-empty-state').style.display = 'none';
+    document.getElementById('correlation-loading').style.display = 'none';
+    document.getElementById('correlation-error').style.display = 'none';
+    document.getElementById('correlation-chart-wrapper').style.display = 'block';
+    document.getElementById('correlation-chart-header').style.display = 'block';
+    document.getElementById('correlation-stats').style.display = 'block';
+    document.getElementById('top-countries').style.display = 'block';
+    document.getElementById('correlation-insights').style.display = 'block';
+    document.getElementById('switch-chart-type').style.display = 'inline-flex';
+    document.getElementById('export-correlation-btn').style.display = 'inline-flex';
+}
+
+function showCorrelationError() {
+    document.getElementById('correlation-empty-state').style.display = 'none';
+    document.getElementById('correlation-chart-wrapper').style.display = 'none';
+    document.getElementById('correlation-loading').style.display = 'none';
+    document.getElementById('correlation-error').style.display = 'block';
+    document.getElementById('correlation-chart-header').style.display = 'none';
+    document.getElementById('correlation-stats').style.display = 'none';
+    document.getElementById('top-countries').style.display = 'none';
+    document.getElementById('correlation-insights').style.display = 'none';
+    document.getElementById('switch-chart-type').style.display = 'none';
+    document.getElementById('export-correlation-btn').style.display = 'none';
+}
+</script>
+{% endblock %}
